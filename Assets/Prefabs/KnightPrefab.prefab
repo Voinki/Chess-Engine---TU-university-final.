@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 1509214703853657888}
   - component: {fileID: 5553698929585516204}
   - component: {fileID: 8499447505625894072}
+  - component: {fileID: 1652003566500131258}
   m_Layer: 0
   m_Name: KnightPrefab
   m_TagString: Untagged
@@ -109,3 +110,22 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: 0ce3a647bdd7aa240843a6e8818dc1b6, type: 2}
+--- !u!114 &1652003566500131258
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7406622859838599304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 72e6924f423ba0f4baa084e776cbc296, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  isWhite: 0
+  hasMoved: 0
+  currentSquare: {x: 0, y: 0}
+  pieceType: 2
+  boardManager: {fileID: 0}
+  captureMoves: []
+  normalMoves: []

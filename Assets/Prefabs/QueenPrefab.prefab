@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5378568668476790887}
   - component: {fileID: 6031479326099151738}
   - component: {fileID: 4654219715518709177}
+  - component: {fileID: 6217611841676677606}
   m_Layer: 0
   m_Name: QueenPrefab
   m_TagString: Untagged
@@ -28,7 +29,7 @@ Transform:
   m_GameObject: {fileID: 4350275468489196196}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 1.0285262, y: 0, z: 0.9937475}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -109,3 +110,22 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: dbe2195794b5e234e91f57ba78410320, type: 2}
+--- !u!114 &6217611841676677606
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4350275468489196196}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26c2b0a0555f83347ab98826f3d4ff05, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  isWhite: 0
+  hasMoved: 0
+  currentSquare: {x: 0, y: 0}
+  pieceType: 4
+  boardManager: {fileID: 0}
+  captureMoves: []
+  normalMoves: []

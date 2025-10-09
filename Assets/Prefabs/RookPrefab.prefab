@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 2222015988665420707}
   - component: {fileID: 1462981831898757219}
   - component: {fileID: 4335644612445839608}
+  - component: {fileID: -576649103402893997}
   m_Layer: 0
   m_Name: RookPrefab
   m_TagString: Untagged
@@ -28,7 +29,7 @@ Transform:
   m_GameObject: {fileID: 7343970823790979631}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.56809056, y: 0, z: 1.0362875}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -109,3 +110,22 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: 37e02ae76c555474dbc6fb4e2318ed3a, type: 2}
+--- !u!114 &-576649103402893997
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7343970823790979631}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a494d31a3e76d642a9d61d7994887f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  isWhite: 0
+  hasMoved: 0
+  currentSquare: {x: 0, y: 0}
+  pieceType: 1
+  boardManager: {fileID: 0}
+  captureMoves: []
+  normalMoves: []
