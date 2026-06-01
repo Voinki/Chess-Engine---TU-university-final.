@@ -23,14 +23,14 @@ public class PauseMenu : MonoBehaviour
     public void PauseGame()
     {
         pausePanel.SetActive(true);
-        Time.timeScale = 0f; // Stop time
+        Time.timeScale = 0f; 
         isPaused = true;
     }
 
     public void ResumeGame()
     {
         pausePanel.SetActive(false);
-        Time.timeScale = 1f; // Resume time
+        Time.timeScale = 1f; 
         isPaused = false;
     }
 
@@ -43,6 +43,6 @@ public class PauseMenu : MonoBehaviour
     public void GoToMainMenu()
     {
         Time.timeScale = 1f;
-        SceneManager.LoadScene("MainMenu"); // make sure this matches your menu scene name
+        SceneManager.LoadScene("MainMenu"); 
     }
 }

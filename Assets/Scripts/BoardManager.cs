@@ -1,28 +1,29 @@
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class BoardManager : MonoBehaviour
 {
     [SerializeField] public Transform boardParent;
+    [SerializeField] private Material whiteSquareMaterial;
+    [SerializeField] private Material blackSquareMaterial;
     public BasePiece[,] piecesOnBoard = new BasePiece[8, 8];
     private Dictionary<Transform, Color> squareOriginalColors = new Dictionary<Transform, Color>();
     public Material transparentMaterial;
     private GameObject lastHighlightedSquare;
-
-    // public Vector2Int? lastPawnToDoubleMoveSquare = null;
     public Vector2Int enPassantSquare = new Vector2Int(-1, -1);
 
-    void Awake() // awake is called before start, which means the board will be generated before trying to place pieces.
+    void Awake() 
     {
         GenerateBoard();
     }
-
-    // Update is called once per frame
     void Update()
     {
+        if (PauseMenu.isPaused)
+            return;
+        GameManager gm = FindFirstObjectByType<GameManager>();
+        if (gm != null && gm.IsGameOver)
+            return;
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             HighlightEmptySquare();
     }
@@ -31,11 +32,6 @@ public class BoardManager : MonoBehaviour
     {
         float squareSize = 0.1f;
         float offset = (8 * squareSize) / 2f;
-
-        Color lightColor = Color.white;
-        // Color darkColor = new Color(0.55f, 0.27f, 0.07f); // wood-ish brown
-         Color darkColor = new Color(0.0f, 0.0f, 0.0f);
-
 
         for (int files = 0; files < 8; files++)
         {
@@ -52,10 +48,10 @@ public class BoardManager : MonoBehaviour
                 square.transform.parent = boardParent;
 
                 Renderer renderer = square.GetComponent<Renderer>();
-                Color baseColor = ((files + ranks) % 2 == 0) ? darkColor : lightColor;
+                Material squareMaterial = ((files + ranks) % 2 == 0) ? blackSquareMaterial : whiteSquareMaterial;
 
-                squareOriginalColors[square.transform] = baseColor;
-                renderer.material.color = baseColor;
+                renderer.material = new Material(squareMaterial);
+                squareOriginalColors[square.transform] = squareMaterial.color;
 
                 char file = (char)('a' + files);
                 int rank = ranks + 1;
@@ -73,10 +69,8 @@ public class BoardManager : MonoBehaviour
             GameObject hitObject = hit.collider.gameObject;
             Transform squareTransform = null;
 
-            // Hit a square
             if (hitObject.transform.parent == boardParent)
                 squareTransform = hitObject.transform;
-            // Hit a piece
             else if (hitObject.TryGetComponent<BasePiece>(out BasePiece piece))
             {
                 char file = (char)('a' + piece.currentSquare.x);
@@ -98,7 +92,6 @@ public class BoardManager : MonoBehaviour
                 Material tempTransparentMaterial = new Material(transparentMaterial);
                 Color hoverCover = baseColor;
                 hoverCover.a = 0.5f;
-                // tempTransparentMaterial.color = hoverCover;
                 tempTransparentMaterial.color = new Color32(0xDA, 0xA5, 0x20, 255);
 
                 Renderer renderer = squareTransform.GetComponent<Renderer>();
@@ -121,7 +114,6 @@ public class BoardManager : MonoBehaviour
         {
             GameObject clicked = hit.collider.gameObject;
 
-            // Only accept squares (not pieces)
             if (clicked.transform.parent == boardParent)
             {
                 string squareName = clicked.name;
@@ -131,17 +123,13 @@ public class BoardManager : MonoBehaviour
                     int file = squareName[0] - 'a';
                     string rankString = squareName.Substring(1);
 
-                    if (int.TryParse(rankString, out int rank))
-                    {
-                        // Convert from chess rank (1–8) to array index (0–7)
+                    if (int.TryParse(rankString, out int rank))          
                         return new Vector2Int(file, rank - 1);
-                    }
+                    
                 }
             }
-            else if (clicked.TryGetComponent<BasePiece>(out BasePiece piece))
-            {
-                return piece.currentSquare;
-            }
+            else if (clicked.TryGetComponent<BasePiece>(out BasePiece piece))     
+                return piece.currentSquare;     
         }
 
         return new Vector2Int(-1, -1); // invalid
@@ -149,11 +137,8 @@ public class BoardManager : MonoBehaviour
 
     public BasePiece GetPieceAtSquare(Vector2Int square)
     {
-        if (square.x < 0 || square.x >= 8 || square.y < 0 || square.y >= 8)
-        {
-            Debug.LogError($"Invalid square {square} requested!");
+        if (square.x < 0 || square.x >= 8 || square.y < 0 || square.y >= 8)  
             return null;
-        }
 
         return piecesOnBoard[square.x, square.y];
     }
@@ -206,10 +191,8 @@ public class BoardManager : MonoBehaviour
         foreach (Transform square in boardParent)
         {
             Renderer rend = square.GetComponent<Renderer>();
-            if (rend != null && squareOriginalColors.ContainsKey(square))
-            {
-                rend.material.color = squareOriginalColors[square];
-            }
+            if (rend != null && squareOriginalColors.ContainsKey(square))   
+                rend.material.color = squareOriginalColors[square];       
         }
     }
 
@@ -260,6 +243,7 @@ public class BoardManager : MonoBehaviour
         Transform squareTransform = boardParent.Find(squareName);
         if (squareTransform != null)
             return squareTransform.position;
+
         return Vector3.zero;
     }
 }

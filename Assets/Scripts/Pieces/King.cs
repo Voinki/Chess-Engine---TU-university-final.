@@ -18,18 +18,14 @@ public class King : BasePiece
       {
 
         BasePiece rook = boardManager.piecesOnBoard[7, rank];
-        if (rook != null && rook.pieceType == PieceType.Rook)
-        {
+        if (rook != null && rook.pieceType == PieceType.Rook)     
           rook.MoveTo(new Vector2Int(5, rank));
-        }
       }
       else
       {
         BasePiece rook = boardManager.piecesOnBoard[0, rank];
-        if (rook != null && rook.pieceType == PieceType.Rook)
-        {
+        if (rook != null && rook.pieceType == PieceType.Rook)   
           rook.MoveTo(new Vector2Int(3, rank));
-        }
       }
     }
 
@@ -77,7 +73,7 @@ public class King : BasePiece
             .Where(move => !boardManager.IsSquareUnderAttack(move, !isWhite))
             .ToList();
     AddCastlingMoves(board);
-    
+
     UpdateLegalMoves(normalMoves, captureMoves);
   }
 
@@ -111,7 +107,7 @@ public class King : BasePiece
             !boardManager.IsSquareUnderAttack(new Vector2Int(3, rank), !isWhite) &&
             !boardManager.IsSquareUnderAttack(new Vector2Int(2, rank), !isWhite))
         {
-          normalMoves.Add(new Vector2Int(2, rank)); // king moves two squares
+          normalMoves.Add(new Vector2Int(2, rank)); // king moves two squaresto the left
         }
       }
     }

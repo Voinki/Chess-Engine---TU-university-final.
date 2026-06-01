@@ -1,20 +1,108 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
-/// <summary>
-/// /////////////////////////////////////////////// before making the optimization changes
-/// </summary>
+
 public class AIOpponent : MonoBehaviour
 {
     private BoardManager boardManager;
     private MoveValidator moveValidator;
     private GameManager gameManager;
 
-    private int searchDepth = 3;
+    private int searchDepth = 4;
+    private const int DRAW_CONTEMPT = 15;
+    private const int MATE_SCORE = 10000;
 
-    // Transposition table to cache board evaluations
+    // Debug counters for testing alpha-beta
+    private int nodesSearched = 0;
+    private int nodesPruned = 0;
+    private int ttHits = 0;
+    private bool enableAlphaBeta = true; // Toggle for testing
+
+    // Base piece values (in centipawns)
+    private static readonly Dictionary<BasePiece.PieceType, int> BASE_PIECE_VALUES = new Dictionary<BasePiece.PieceType, int>
+    {
+        {BasePiece.PieceType.Pawn, 100},
+        {BasePiece.PieceType.Knight, 320},
+        {BasePiece.PieceType.Bishop, 330},
+        {BasePiece.PieceType.Rook, 500},
+        {BasePiece.PieceType.Queen, 900},
+        {BasePiece.PieceType.King, 20000},
+    };
+
+    // Piece-Square Tables (from white's perspective, will be flipped for black)
+    private static readonly int[,] PAWN_TABLE = new int[,]
+    {
+        {  0,  0,  0,  0,  0,  0,  0,  0 },
+        { 50, 50, 50, 50, 50, 50, 50, 50 },
+        { 10, 10, 20, 30, 30, 20, 10, 10 },
+        {  5,  5, 10, 25, 25, 10,  5,  5 },
+        {  0,  0,  0, 20, 20,  0,  0,  0 },
+        {  5, -5,-10,  0,  0,-10, -5,  5 },
+        {  5, 10, 10,-20,-20, 10, 10,  5 },
+        {  0,  0,  0,  0,  0,  0,  0,  0 }
+    };
+
+    private static readonly int[,] KNIGHT_TABLE = new int[,]
+    {
+        { -50,-40,-30,-30,-30,-30,-40,-50 },
+        { -40,-20,  0,  0,  0,  0,-20,-40 },
+        { -30,  0, 10, 15, 15, 10,  0,-30 },
+        { -30,  5, 15, 20, 20, 15,  5,-30 },
+        { -30,  0, 15, 20, 20, 15,  0,-30 },
+        { -30,  5, 10, 15, 15, 10,  5,-30 },
+        { -40,-20,  0,  5,  5,  0,-20,-40 },
+        { -50,-40,-30,-30,-30,-30,-40,-50 }
+    };
+
+    private static readonly int[,] BISHOP_TABLE = new int[,]
+    {
+        { -20,-10,-10,-10,-10,-10,-10,-20 },
+        { -10,  0,  0,  0,  0,  0,  0,-10 },
+        { -10,  0,  5, 10, 10,  5,  0,-10 },
+        { -10,  5,  5, 10, 10,  5,  5,-10 },
+        { -10,  0, 10, 10, 10, 10,  0,-10 },
+        { -10, 10, 10, 10, 10, 10, 10,-10 },
+        { -10,  5,  0,  0,  0,  0,  5,-10 },
+        { -20,-10,-10,-10,-10,-10,-10,-20 }
+    };
+
+    private static readonly int[,] ROOK_TABLE = new int[,]
+    {
+        {  0,  0,  0,  0,  0,  0,  0,  0 },
+        {  5, 10, 10, 10, 10, 10, 10,  5 },
+        { -5,  0,  0,  0,  0,  0,  0, -5 },
+        { -5,  0,  0,  0,  0,  0,  0, -5 },
+        { -5,  0,  0,  0,  0,  0,  0, -5 },
+        { -5,  0,  0,  0,  0,  0,  0, -5 },
+        { -5,  0,  0,  0,  0,  0,  0, -5 },
+        {  0,  0,  0,  5,  5,  0,  0,  0 }
+    };
+
+    private static readonly int[,] QUEEN_TABLE = new int[,]
+    {
+        { -20,-10,-10, -5, -5,-10,-10,-20 },
+        { -10,  0,  0,  0,  0,  0,  0,-10 },
+        { -10,  0,  5,  5,  5,  5,  0,-10 },
+        {  -5,  0,  5,  5,  5,  5,  0, -5 },
+        {   0,  0,  5,  5,  5,  5,  0, -5 },
+        { -10,  5,  5,  5,  5,  5,  0,-10 },
+        { -10,  0,  5,  0,  0,  0,  0,-10 },
+        { -20,-10,-10, -5, -5,-10,-10,-20 }
+    };
+
+    private static readonly int[,] KING_TABLE = new int[,]
+    {
+        { -30,-40,-40,-50,-50,-40,-40,-30 },
+        { -30,-40,-40,-50,-50,-40,-40,-30 },
+        { -30,-40,-40,-50,-50,-40,-40,-30 },
+        { -30,-40,-40,-50,-50,-40,-40,-30 },
+        { -20,-30,-30,-40,-40,-30,-30,-20 },
+        { -10,-20,-20,-20,-20,-20,-20,-10 },
+        {  20, 20,  0,  0,  0,  0, 20, 20 },
+        {  20, 30, 10,  0,  0, 10, 30, 20 }
+    };
+
     private Dictionary<string, (int eval, int depth)> transpositionTable = new Dictionary<string, (int, int)>();
 
     void Start()
@@ -27,7 +115,7 @@ public class AIOpponent : MonoBehaviour
 
     public void MakeMoveIfItsAITurn()
     {
-        if (!gameManager.IsWhiteTurn && !gameManager.IsGameOver)
+        if (!gameManager.IsWhiteTurn && !gameManager.IsGameOver && !gameManager.isPromotionPending)
             StartCoroutine(MakeBestMove());
     }
 
@@ -35,26 +123,8 @@ public class AIOpponent : MonoBehaviour
     {
         yield return new WaitUntil(() => !gameManager.isPromotionPending);
 
-        Debug.Log("========== AI TURN START ==========");
-        Debug.Log("Checking all black pieces on board:");
-        for (int x = 0; x < 8; x++)
-        {
-            for (int y = 0; y < 8; y++)
-            {
-                BasePiece p = boardManager.piecesOnBoard[x, y];
-                if (p != null && !p.isWhite)
-                {
-                    Debug.Log($"  [{x},{y}] = {p.pieceType} (name: {p.name})");
-                }
-            }
-        }
-        Debug.Log("AI thinking...");
-        yield return new WaitForSeconds(1);
-
-        // Store the ORIGINAL board reference
         BasePiece[,] realBoard = boardManager.piecesOnBoard;
 
-        // Calculate moves for all pieces on the REAL board
         RecalculateAllMoves(realBoard);
         moveValidator.FilterIllegalMoves(false);
 
@@ -64,117 +134,42 @@ public class AIOpponent : MonoBehaviour
         Vector2Int bestMoveSquare = Vector2Int.zero;
         int bestEval = int.MaxValue;
 
-        // Store all pieces' current squares before simulation
-        Dictionary<BasePiece, Vector2Int> originalSquares = new Dictionary<BasePiece, Vector2Int>();
-        for (int x = 0; x < 8; x++)
+        var orderedMoves = GetOrderedMoves(realBoard, blackPieces);
+
+        // Reset debug counters
+        nodesSearched = 0;
+        nodesPruned = 0;
+        ttHits = 0;
+        System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+
+        foreach (var (piece, move) in orderedMoves)
         {
-            for (int y = 0; y < 8; y++)
+            MoveRecord record = ApplyMove(realBoard, piece, move);
+            int eval = MiniMax(realBoard, searchDepth - 1, true, int.MinValue, int.MaxValue);
+
+            eval += CheckRepetitionPenalty(realBoard);
+
+            UndoMove(realBoard, record);
+
+            if (eval < bestEval)
             {
-                if (realBoard[x, y] != null)
-                    originalSquares[realBoard[x, y]] = realBoard[x, y].currentSquare;
+                bestEval = eval;
+                bestPiece = piece;
+                bestMoveSquare = move;
             }
         }
 
-        foreach (BasePiece piece in blackPieces)
-        {
-            List<Vector2Int> allMoves = piece.normalMoves.Concat(piece.captureMoves).ToList();
+        sw.Stop();
+        float prunePercent = nodesSearched > 0 ? (nodesPruned * 100f / nodesSearched) : 0;
+        float ttPercent = nodesSearched > 0 ? (ttHits * 100f / nodesSearched) : 0;
+        Debug.Log($"Search stats: {nodesSearched} nodes, {nodesPruned} pruned ({prunePercent:F1}%), {ttHits} TT hits ({ttPercent:F1}%), {sw.ElapsedMilliseconds}ms");
 
-            // MOVE ORDERING: Evaluate captures first, they're more likely to be good
-            allMoves = allMoves.OrderByDescending(move =>
-            {
-                BasePiece target = realBoard[move.x, move.y];
-                if (target != null) return 100; // Captures first
-                if (piece.pieceType == BasePiece.PieceType.Pawn && Mathf.Abs(move.y - piece.currentSquare.y) == 2) return 50; // Two-square pawn moves
-                return 0; // Normal moves last
-            }).ToList();
-
-            if (allMoves.Count > 0)
-                Debug.Log($"Evaluating {piece.pieceType} at {piece.currentSquare} with {allMoves.Count} moves: {string.Join(", ", allMoves)}");
-
-            foreach (Vector2Int move in allMoves)
-            {
-                // Store ALL pieces' move lists before MiniMax
-                Dictionary<BasePiece, (List<Vector2Int> normal, List<Vector2Int> capture)> savedMoves =
-                    new Dictionary<BasePiece, (List<Vector2Int>, List<Vector2Int>)>();
-
-                for (int x = 0; x < 8; x++)
-                {
-                    for (int y = 0; y < 8; y++)
-                    {
-                        BasePiece p = realBoard[x, y];
-                        if (p != null)
-                        {
-                            savedMoves[p] = (
-                                new List<Vector2Int>(p.normalMoves),
-                                new List<Vector2Int>(p.captureMoves)
-                            );
-                        }
-                    }
-                }
-
-                // Apply move on the REAL board temporarily
-                MoveRecord rec = ApplyMove(realBoard, piece, move);
-
-                int eval = MiniMax(realBoard, searchDepth - 1, true, int.MinValue, int.MaxValue);
-
-                // Undo the move
-                UndoMove(realBoard, rec);
-
-                // Restore ALL pieces' move lists
-                foreach (var kvp in savedMoves)
-                {
-                    kvp.Key.UpdateLegalMoves(kvp.Value.normal, kvp.Value.capture);
-                }
-
-                if (eval < bestEval)
-                {
-                    bestEval = eval;
-                    bestPiece = piece;
-                    bestMoveSquare = move;
-                }
-            }
-        }
-
-        // Restore all pieces to their original squares (in case something went wrong)
-        foreach (var kvp in originalSquares)
-        {
-            kvp.Key.currentSquare = kvp.Value;
-        }
-
-        // Recalculate moves on the real board after all simulations
         RecalculateAllMoves(realBoard);
         moveValidator.FilterIllegalMoves(false);
 
         if (bestPiece != null)
         {
-            Debug.Log($"=== FINAL DECISION ===");
-            Debug.Log($"Best piece is {bestPiece.pieceType} at {bestPiece.currentSquare}");
-            Debug.Log($"It currently has {bestPiece.normalMoves.Count} normal moves: {string.Join(", ", bestPiece.normalMoves)}");
-            Debug.Log($"It currently has {bestPiece.captureMoves.Count} capture moves: {string.Join(", ", bestPiece.captureMoves)}");
-            Debug.Log($"But we're trying to move it to {bestMoveSquare}");
-            Debug.Log($"AI plays {bestPiece.pieceType} from {bestPiece.currentSquare} to {bestMoveSquare} (eval: {bestEval})");
-
-            // stupid promotion
-            Vector2Int fromSquare = bestPiece.currentSquare;
-            bestPiece.MoveTo(bestMoveSquare);
-
-            // After MoveTo, if it was a pawn promotion, bestPiece is destroyed
-            // We need to get the NEW piece at the target square
-            BasePiece actualPiece = boardManager.piecesOnBoard[bestMoveSquare.x, bestMoveSquare.y];
-
-            if (actualPiece != null && actualPiece != bestPiece)
-            {
-                Debug.Log($"Promotion, new piece is {actualPiece.pieceType}");
-            }
-            else
-                boardManager.UpdateBoardState(bestPiece, bestMoveSquare);
-            
-
-            gameManager.SendMessage("SwitchTurns");
-
-            // bestPiece.MoveTo(bestMoveSquare);
-            // boardManager.UpdateBoardState(bestPiece, bestMoveSquare);
-            // gameManager.SendMessage("SwitchTurns");
+            ExecuteBestMove(bestPiece, bestMoveSquare, bestEval);
         }
         else
         {
@@ -184,17 +179,112 @@ public class AIOpponent : MonoBehaviour
         yield break;
     }
 
+    private void ExecuteBestMove(BasePiece piece, Vector2Int moveSquare, int eval)
+    {
+        // Debug.Log($"AI plays {piece.pieceType} from {piece.currentSquare} to {moveSquare} (eval: {eval})");
+        // Vector2Int fromSquare = piece.currentSquare;
+        // piece.MoveTo(moveSquare);
+        // boardManager.UpdateBoardState(piece, moveSquare);
+
+        // boardManager.ClearMoveHighlights();
+        // Color orange = new Color(1f, 0.55f, 0f);
+        // boardManager.HighlightSquare(fromSquare, orange);
+        // boardManager.HighlightSquare(moveSquare, orange);
+        // gameManager.SendMessage("SwitchTurns");
+
+        Debug.Log($"AI plays {piece.pieceType} from {piece.currentSquare} to {moveSquare} (eval: {eval})");
+        Vector2Int fromSquare = piece.currentSquare;
+
+        // MoveTo handles all board updates including promotion
+        piece.MoveTo(moveSquare);
+
+        // DON'T call UpdateBoardState - MoveTo already handled it!
+        // If promotion happened, the pawn is destroyed and replaced with a new piece
+        // boardManager.UpdateBoardState(piece, moveSquare); // REMOVED
+
+        boardManager.ClearMoveHighlights();
+        Color orange = new Color(1f, 0.55f, 0f);
+        boardManager.HighlightSquare(fromSquare, orange);
+        boardManager.HighlightSquare(moveSquare, orange);
+        gameManager.SendMessage("SwitchTurns");
+    }
+
+    private int CheckRepetitionPenalty(BasePiece[,] board)
+    {
+        var history = gameManager.GetPositionHistory();
+        string posKey = GetBoardHash(board);
+
+        int startIdx = Mathf.Max(0, history.Count - 8);
+        for (int i = history.Count - 1; i >= startIdx; i--)
+        {
+            if (history[i] == posKey)
+                return 20;
+        }
+        return 0;
+    }
+
+    private List<(BasePiece piece, Vector2Int move)> GetOrderedMoves(BasePiece[,] board, List<BasePiece> pieces)
+    {
+        var moves = new List<(BasePiece, Vector2Int, int)>();
+
+        foreach (BasePiece piece in pieces)
+        {
+            foreach (Vector2Int move in piece.normalMoves.Concat(piece.captureMoves))
+            {
+                int score = ScoreMove(board, piece, move);
+                moves.Add((piece, move, score));
+            }
+        }
+
+        return moves.OrderByDescending(m => m.Item3)
+                    .Select(m => (m.Item1, m.Item2))
+                    .ToList();
+    }
+
+    private int ScoreMove(BasePiece[,] board, BasePiece piece, Vector2Int move)
+    {
+        int score = 0;
+        BasePiece target = board[move.x, move.y];
+
+        // 1. Captures (MVV-LVA)
+        if (target != null)
+        {
+            int victim = BASE_PIECE_VALUES[target.pieceType];
+            int attacker = BASE_PIECE_VALUES[piece.pieceType];
+            score = 10000 + victim - attacker;
+        }
+        // 2. Piece-square table improvement
+        else
+        {
+            int currentPST = GetPositionalBonus(piece.pieceType, piece.isWhite, piece.currentSquare.x, piece.currentSquare.y);
+            int newPST = GetPositionalBonus(piece.pieceType, piece.isWhite, move.x, move.y);
+            score = (newPST - currentPST) * 10; // Amplify positional gains
+        }
+
+        // 3. Center control bonus
+        if (move.x >= 3 && move.x <= 4 && move.y >= 3 && move.y <= 4)
+            score += 20;
+
+        // 4. Pawn pushes
+        if (piece.pieceType == BasePiece.PieceType.Pawn)
+        {
+            int pushDist = Mathf.Abs(move.y - piece.currentSquare.y);
+            if (pushDist == 2)
+                score += 15;
+            else if (pushDist == 1)
+                score += 5;
+        }
+
+        return score;
+    }
+
     private void RecalculateAllMoves(BasePiece[,] board)
     {
         for (int x = 0; x < 8; x++)
         {
             for (int y = 0; y < 8; y++)
             {
-                BasePiece piece = board[x, y];
-                if (piece != null)
-                {
-                    piece.CalculateValidMoves(board);
-                }
+                board[x, y]?.CalculateValidMoves(board);
             }
         }
     }
@@ -203,13 +293,14 @@ public class AIOpponent : MonoBehaviour
 
     private int MiniMax(BasePiece[,] board, int depth, bool maximizingPlayer, int alpha, int beta)
     {
-        // Check transposition table
+        nodesSearched++;
+
         string boardHash = GetBoardHash(board);
-        if (transpositionTable.ContainsKey(boardHash))
+        if (transpositionTable.TryGetValue(boardHash, out var cached) && cached.depth >= depth)
         {
-            var cached = transpositionTable[boardHash];
-            if (cached.depth >= depth)
-                return cached.eval;
+            ttHits++;
+            int cachedEval = cached.eval;
+            return (cachedEval == 0) ? (maximizingPlayer ? DRAW_CONTEMPT : -DRAW_CONTEMPT) : cachedEval;
         }
 
         if (depth == 0)
@@ -221,58 +312,37 @@ public class AIOpponent : MonoBehaviour
 
         bool isWhite = maximizingPlayer;
 
-        // CRITICAL: Temporarily swap the board so MoveValidator uses the simulation
         BasePiece[,] originalBoardRef = boardManager.piecesOnBoard;
         boardManager.piecesOnBoard = board;
 
-        // Now recalculate and filter moves - MoveValidator will use the correct board
-        RecalculateAllMoves(board);
-        moveValidator.FilterIllegalMoves(isWhite);
-
-        List<BasePiece> pieces = GetAllPieces(board, isWhite);
-
-        // Restore the original board reference immediately after filtering
-        boardManager.piecesOnBoard = originalBoardRef;
-
-        // Check if there are any legal moves
-        bool hasLegalMoves = false;
-        foreach (BasePiece p in pieces)
+        try
         {
-            if (p.normalMoves.Count > 0 || p.captureMoves.Count > 0)
+            RecalculateAllMoves(board);
+            moveValidator.FilterIllegalMoves(isWhite);
+
+            List<BasePiece> pieces = GetAllPieces(board, isWhite);
+
+            if (!HasLegalMoves(pieces))
             {
-                hasLegalMoves = true;
-                break;
+                bool inCheck = moveValidator.IsKingInCheck(isWhite);
+                int result;
+                if (inCheck)
+                    result = maximizingPlayer ? -MATE_SCORE + depth : MATE_SCORE - depth;
+                else
+                    result = 0; // Stalemate (will be adjusted below)
+
+                transpositionTable[boardHash] = (result, depth);
+                return (result == 0) ? (maximizingPlayer ? DRAW_CONTEMPT : -DRAW_CONTEMPT) : result;
             }
-        }
 
-        if (!hasLegalMoves)
-        {
-            // Need to check king status with the simulated board
-            boardManager.piecesOnBoard = board;
-            bool inCheck = moveValidator.IsKingInCheck(isWhite);
-            boardManager.piecesOnBoard = originalBoardRef;
+            int bestEval = maximizingPlayer ? int.MinValue : int.MaxValue;
+            var orderedMoves = GetOrderedMoves(board, pieces);
 
-            if (inCheck)
-                return maximizingPlayer ? -10000 + depth : 10000 - depth;
-            else
-                return 0; // Stalemate
-        }
-
-        int bestEval = maximizingPlayer ? int.MinValue : int.MaxValue;
-
-        foreach (BasePiece piece in pieces)
-        {
-            List<Vector2Int> moves = piece.normalMoves.Concat(piece.captureMoves).ToList();
-
-            // MOVE ORDERING in search too
-            moves = moves.OrderByDescending(move =>
+            foreach (var (piece, move) in orderedMoves)
             {
-                BasePiece target = board[move.x, move.y];
-                return target != null ? 100 : 0;
-            }).ToList();
+                if (board[move.x, move.y]?.pieceType == BasePiece.PieceType.King)
+                    continue;
 
-            foreach (Vector2Int move in moves)
-            {
                 MoveRecord rec = ApplyMove(board, piece, move);
                 int eval = MiniMax(board, depth - 1, !maximizingPlayer, alpha, beta);
                 UndoMove(board, rec);
@@ -289,33 +359,48 @@ public class AIOpponent : MonoBehaviour
                 }
 
                 // Alpha-beta pruning
-                if (beta <= alpha)
+                if (enableAlphaBeta && beta <= alpha)
+                {
+                    nodesPruned++;
                     break;
+                }
             }
 
-            if (beta <= alpha)
-                break;
+            // Store raw bestEval in TT (no draw contempt)
+            transpositionTable[boardHash] = (bestEval, depth);
+
+            // Apply draw contempt only when returning
+            int adjusted = (bestEval == 0) ? (maximizingPlayer ? DRAW_CONTEMPT : -DRAW_CONTEMPT) : bestEval;
+            return adjusted;
         }
+        finally
+        {
+            boardManager.piecesOnBoard = originalBoardRef;
+        }
+    }
 
-        // Store in transposition table
-        transpositionTable[boardHash] = (bestEval, depth);
-
-        return bestEval;
+    private bool HasLegalMoves(List<BasePiece> pieces)
+    {
+        foreach (BasePiece piece in pieces)
+        {
+            if (piece.normalMoves.Count > 0 || piece.captureMoves.Count > 0)
+                return true;
+        }
+        return false;
     }
 
     private string GetBoardHash(BasePiece[,] board)
     {
-        // Simple hash of board state
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(128);
         for (int x = 0; x < 8; x++)
         {
             for (int y = 0; y < 8; y++)
             {
                 BasePiece p = board[x, y];
                 if (p == null)
-                    sb.Append("_");
+                    sb.Append('_');
                 else
-                    sb.Append($"{(p.isWhite ? "W" : "B")}{(int)p.pieceType}");
+                    sb.Append($"{(p.isWhite ? 'W' : 'B')}{(int)p.pieceType}");
             }
         }
         return sb.ToString();
@@ -323,16 +408,6 @@ public class AIOpponent : MonoBehaviour
 
     private int EvaluateBoard(BasePiece[,] board)
     {
-        Dictionary<BasePiece.PieceType, int> pieceValues = new Dictionary<BasePiece.PieceType, int>
-        {
-            {BasePiece.PieceType.Pawn, 100},
-            {BasePiece.PieceType.Knight, 320},
-            {BasePiece.PieceType.Bishop, 330},
-            {BasePiece.PieceType.Rook, 500},
-            {BasePiece.PieceType.Queen, 900},
-            {BasePiece.PieceType.King, 20000},
-        };
-
         int totalScore = 0;
 
         for (int x = 0; x < 8; x++)
@@ -343,42 +418,52 @@ public class AIOpponent : MonoBehaviour
                 if (piece == null)
                     continue;
 
-                int value = pieceValues[piece.pieceType];
-
-                // Add positional bonuses
-                int positionalBonus = 0;
-
-                // Encourage pawns to advance (especially center pawns)
-                if (piece.pieceType == BasePiece.PieceType.Pawn)
-                {
-                    int advancement = piece.isWhite ? y : (7 - y);
-                    positionalBonus += advancement * 5;
-
-                    // Center pawns are worth more
-                    if (x >= 2 && x <= 5)
-                        positionalBonus += 10;
-                }
-
-                // Knights and bishops better in center
-                if (piece.pieceType == BasePiece.PieceType.Knight || piece.pieceType == BasePiece.PieceType.Bishop)
-                {
-                    if (x >= 2 && x <= 5 && y >= 2 && y <= 5)
-                        positionalBonus += 15;
-                }
-
-                // Slight bonus for development (getting pieces off back rank)
-                if ((piece.isWhite && y > 0) || (!piece.isWhite && y < 7))
-                {
-                    if (piece.pieceType == BasePiece.PieceType.Knight ||
-                        piece.pieceType == BasePiece.PieceType.Bishop)
-                        positionalBonus += 10;
-                }
-
-                totalScore += piece.isWhite ? (value + positionalBonus) : -(value + positionalBonus);
+                int pieceValue = GetPieceValue(piece, x, y);
+                totalScore += piece.isWhite ? pieceValue : -pieceValue;
             }
         }
 
         return totalScore;
+    }
+
+    // NEW: Get piece value including positional bonus from piece-square tables
+    private int GetPieceValue(BasePiece piece, int x, int y)
+    {
+        int baseValue = BASE_PIECE_VALUES[piece.pieceType];
+        int positionalBonus = GetPositionalBonus(piece.pieceType, piece.isWhite, x, y);
+
+        return baseValue + positionalBonus;
+    }
+
+    // NEW: Get positional bonus from piece-square tables
+    private int GetPositionalBonus(BasePiece.PieceType pieceType, bool isWhite, int x, int y)
+    {
+        // For black pieces, flip the y-coordinate to use the same tables
+        int tableY = isWhite ? y : (7 - y);
+
+        switch (pieceType)
+        {
+            case BasePiece.PieceType.Pawn:
+                return PAWN_TABLE[tableY, x];
+
+            case BasePiece.PieceType.Knight:
+                return KNIGHT_TABLE[tableY, x];
+
+            case BasePiece.PieceType.Bishop:
+                return BISHOP_TABLE[tableY, x];
+
+            case BasePiece.PieceType.Rook:
+                return ROOK_TABLE[tableY, x];
+
+            case BasePiece.PieceType.Queen:
+                return QUEEN_TABLE[tableY, x];
+
+            case BasePiece.PieceType.King:
+                return KING_TABLE[tableY, x];
+
+            default:
+                return 0;
+        }
     }
 
     private List<BasePiece> GetAllPieces(BasePiece[,] board, bool isWhite)
@@ -400,7 +485,7 @@ public class AIOpponent : MonoBehaviour
 
     #endregion
 
-    #region Apply/Undo moves
+    #region Apply/Undo Moves
 
     private struct MoveRecord
     {
@@ -422,12 +507,6 @@ public class AIOpponent : MonoBehaviour
             movedPieceHasMoved = piece.hasMoved
         };
 
-        // Verify the piece is actually where it thinks it is
-        if (board[record.from.x, record.from.y] != piece)
-        {
-            Debug.LogError($"MISMATCH! {piece.pieceType} thinks it's at {record.from} but board has {(board[record.from.x, record.from.y]?.pieceType.ToString() ?? "null")}");
-        }
-
         board[record.from.x, record.from.y] = null;
         board[record.to.x, record.to.y] = piece;
         piece.currentSquare = record.to;
@@ -442,6 +521,58 @@ public class AIOpponent : MonoBehaviour
         board[record.to.x, record.to.y] = record.capturedPiece;
         record.movedPiece.currentSquare = record.from;
         record.movedPiece.hasMoved = record.movedPieceHasMoved;
+    }
+
+    public void ClearTranspositionTable()
+    {
+        transpositionTable.Clear();
+    }
+
+    // Testing method - compare alpha-beta vs full minimax
+    public void TestAlphaBeta()
+    {
+        BasePiece[,] board = boardManager.piecesOnBoard;
+
+        // Test with alpha-beta enabled
+        enableAlphaBeta = true;
+        transpositionTable.Clear();
+        nodesSearched = 0;
+        nodesPruned = 0;
+        ttHits = 0;
+
+        System.Diagnostics.Stopwatch sw1 = System.Diagnostics.Stopwatch.StartNew();
+        int evalWithPruning = MiniMax(board, searchDepth, false, int.MinValue, int.MaxValue);
+        sw1.Stop();
+
+        int nodesWithPruning = nodesSearched;
+        int pruned = nodesPruned;
+        int ttWithPruning = ttHits;
+
+        // Test without alpha-beta
+        enableAlphaBeta = false;
+        transpositionTable.Clear();
+        nodesSearched = 0;
+        nodesPruned = 0;
+        ttHits = 0;
+
+        System.Diagnostics.Stopwatch sw2 = System.Diagnostics.Stopwatch.StartNew();
+        int evalWithoutPruning = MiniMax(board, searchDepth, false, int.MinValue, int.MaxValue);
+        sw2.Stop();
+
+        int nodesWithoutPruning = nodesSearched;
+        int ttWithoutPruning = ttHits;
+
+        // Re-enable alpha-beta
+        enableAlphaBeta = true;
+
+        Debug.Log("=== Alpha-Beta Test Results ===");
+        Debug.Log($"Eval WITH pruning: {evalWithPruning}");
+        Debug.Log($"Eval WITHOUT pruning: {evalWithoutPruning}");
+        Debug.Log($"Evaluations match: {evalWithPruning == evalWithoutPruning}");
+        Debug.Log($"Nodes with pruning: {nodesWithPruning} ({sw1.ElapsedMilliseconds}ms, {ttWithPruning} TT hits)");
+        Debug.Log($"Nodes without pruning: {nodesWithoutPruning} ({sw2.ElapsedMilliseconds}ms, {ttWithoutPruning} TT hits)");
+        Debug.Log($"Branches pruned: {pruned}");
+        Debug.Log($"Efficiency: {100 - (nodesWithPruning * 100 / nodesWithoutPruning)}% reduction");
     }
 
     #endregion
