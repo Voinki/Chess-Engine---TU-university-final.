@@ -8,13 +8,10 @@ public class MoveValidator : MonoBehaviour
 
     void Awake()
     {
+            Debug.Log($"MoveValidator Awake on {gameObject.name} (InstanceID {GetInstanceID()})");
+
         boardManager = GetComponent<BoardManager>();
     }
-
-    /// <summary>
-    /// Filters all pieces' moves to only include legal moves (doesn't leave king in check)
-    /// Call this after all pieces have calculated their candidate moves
-    /// </summary>
     public void FilterIllegalMoves(bool forWhite)
     {
         List<BasePiece> pieces = GetAllPiecesForColor(forWhite);
@@ -40,29 +37,19 @@ public class MoveValidator : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Checks if a move is legal (doesn't leave own king in check)
-    /// </summary>
     private bool IsMoveLegal(BasePiece piece, Vector2Int targetSquare)
     {
-        // Create simulated board
         BasePiece[,] simulatedBoard = SimulateMove(piece, targetSquare, out BasePiece capturedPiece, out Vector2Int originalSquare);
 
-        // Find king position on simulated board
         Vector2Int kingPos = FindKingPosition(simulatedBoard, piece.isWhite);
 
-        // Check if king is in check on simulated board
         bool kingInCheck = IsSquareUnderAttack(simulatedBoard, kingPos, !piece.isWhite);
 
         return !kingInCheck;
     }
-
-    /// <summary>
-    /// Simulates a move and returns the resulting board state
-    /// </summary>
     private BasePiece[,] SimulateMove(BasePiece piece, Vector2Int targetSquare, out BasePiece capturedPiece, out Vector2Int originalSquare)
     {
-        // Copy the board
+        // cop the board
         BasePiece[,] simBoard = new BasePiece[8, 8];
         for (int x = 0; x < 8; x++)
         {
@@ -75,7 +62,6 @@ public class MoveValidator : MonoBehaviour
         originalSquare = piece.currentSquare;
         capturedPiece = simBoard[targetSquare.x, targetSquare.y];
 
-        // Handle en passant capture in simulation
         if (piece.pieceType == BasePiece.PieceType.Pawn)
         {
             bool isEnPassant = (boardManager.enPassantSquare.x != -1) &&
@@ -89,11 +75,9 @@ public class MoveValidator : MonoBehaviour
             }
         }
 
-        // Perform the move on simulated board
         simBoard[originalSquare.x, originalSquare.y] = null;
         simBoard[targetSquare.x, targetSquare.y] = piece;
 
-        // Handle castling in simulation
         if (piece.pieceType == BasePiece.PieceType.King && Mathf.Abs(targetSquare.x - originalSquare.x) == 2)
         {
             int rank = piece.isWhite ? 0 : 7;
@@ -111,10 +95,6 @@ public class MoveValidator : MonoBehaviour
 
         return simBoard;
     }
-
-    /// <summary>
-    /// Finds the king's position on the board
-    /// </summary>
     private Vector2Int FindKingPosition(BasePiece[,] board, bool isWhite)
     {
         for (int x = 0; x < 8; x++)
@@ -132,12 +112,8 @@ public class MoveValidator : MonoBehaviour
         return new Vector2Int(-1, -1);
     }
 
-    /// <summary>
-    /// Checks if a square is under attack by the opposing color
-    /// </summary>
     private bool IsSquareUnderAttack(BasePiece[,] board, Vector2Int square, bool byWhite)
     {
-        // Check all enemy pieces to see if they can attack this square
         for (int x = 0; x < 8; x++)
         {
             for (int y = 0; y < 8; y++)
@@ -153,9 +129,6 @@ public class MoveValidator : MonoBehaviour
         return false;
     }
 
-    /// <summary>
-    /// Checks if a specific piece can attack a square
-    /// </summary>
     private bool CanPieceAttackSquare(BasePiece[,] board, BasePiece piece, Vector2Int targetSquare)
     {
         Vector2Int from = piece.currentSquare;
@@ -210,76 +183,59 @@ public class MoveValidator : MonoBehaviour
 
     private bool CanSlidingPieceAttack(BasePiece[,] board, Vector2Int from, Vector2Int to, bool diagonal, bool straight)
     {
-        int dx = to.x - from.x;
-        int dy = to.y - from.y;
+        int diagonalX = to.x - from.x;
+        int diagonalY = to.y - from.y;
 
-        // Check if movement is in valid direction
-        bool isDiagonal = Mathf.Abs(dx) == Mathf.Abs(dy) && dx != 0;
-        bool isStraight = (dx == 0 || dy == 0) && (dx != 0 || dy != 0);
+        bool isDiagonal = Mathf.Abs(diagonalX) == Mathf.Abs(diagonalY) && diagonalX != 0;
+        bool isStraight = (diagonalX == 0 || diagonalY == 0) && (diagonalX != 0 || diagonalY != 0);
 
         if (diagonal && !isDiagonal && !isStraight) return false;
         if (!diagonal && straight && !isStraight) return false;
         if (diagonal && !straight && !isDiagonal) return false;
         if (!isDiagonal && !isStraight) return false;
 
-        // Get direction
-        int stepX = dx == 0 ? 0 : dx / Mathf.Abs(dx);
-        int stepY = dy == 0 ? 0 : dy / Mathf.Abs(dy);
+        // direction
+        int stepX = diagonalX == 0 ? 0 : diagonalX / Mathf.Abs(diagonalX);
+        int stepY = diagonalY == 0 ? 0 : diagonalY / Mathf.Abs(diagonalY);
 
-        // Check path is clear
-        int x = from.x + stepX;
-        int y = from.y + stepY;
+        // chekc if path clear
+        int pathX = from.x + stepX;
+        int pathY = from.y + stepY;
 
-        while (x != to.x || y != to.y)
+        while (pathX != to.x || pathY != to.y)
         {
-            if (board[x, y] != null)
+            if (board[pathX, pathY] != null)
                 return false;
 
-            x += stepX;
-            y += stepY;
+            pathX += stepX;
+            pathY += stepY;
         }
 
         return true;
     }
 
-    /// <summary>
-    /// Checks if the current player is in check
-    /// </summary>
     public bool IsKingInCheck(bool isWhite)
     {
         Vector2Int kingPos = FindKingPosition(boardManager.piecesOnBoard, isWhite);
         return IsSquareUnderAttack(boardManager.piecesOnBoard, kingPos, !isWhite);
     }
 
-    /// <summary>
-    /// Checks if the current player is in checkmate
-    /// </summary>
     public bool IsCheckmate(bool isWhite)
     {
-        // Must be in check
         if (!IsKingInCheck(isWhite))
             return false;
 
-        // And have no legal moves
         return !HasAnyLegalMoves(isWhite);
     }
 
-    /// <summary>
-    /// Checks if the current player is in stalemate
-    /// </summary>
     public bool IsStalemate(bool isWhite)
     {
-        // Must NOT be in check
         if (IsKingInCheck(isWhite))
             return false;
 
-        // And have no legal moves
         return !HasAnyLegalMoves(isWhite);
     }
 
-    /// <summary>
-    /// Checks if a player has any legal moves available
-    /// </summary>
     private bool HasAnyLegalMoves(bool isWhite)
     {
         List<BasePiece> pieces = GetAllPiecesForColor(isWhite);
@@ -293,9 +249,6 @@ public class MoveValidator : MonoBehaviour
         return false;
     }
 
-    /// <summary>
-    /// Gets all pieces of a specific color from the board
-    /// </summary>
     private List<BasePiece> GetAllPiecesForColor(bool isWhite)
     {
         List<BasePiece> pieces = new List<BasePiece>();
@@ -315,12 +268,8 @@ public class MoveValidator : MonoBehaviour
         return pieces;
     }
 
-    /// <summary>
-    /// Main method to call each turn - calculates and filters moves for the current player
-    /// </summary>
     public void ValidateMovesForCurrentPlayer(bool isWhiteTurn)
     {
-        // First, calculate all candidate moves for all pieces
         for (int x = 0; x < 8; x++)
         {
             for (int y = 0; y < 8; y++)
@@ -333,23 +282,45 @@ public class MoveValidator : MonoBehaviour
             }
         }
 
-        // Then filter out illegal moves for the current player
         FilterIllegalMoves(isWhiteTurn);
+    }
 
-        // Check game state
-        if (IsCheckmate(isWhiteTurn))
+public bool IsInsufficientMaterial()
+{
+    List<BasePiece> whitePieces = GetAllPiecesForColor(true);
+    List<BasePiece> blackPieces = GetAllPiecesForColor(false);
+    
+    if (whitePieces.Count == 1 && blackPieces.Count == 1)
+        return true;
+    
+    if ((whitePieces.Count == 1 && blackPieces.Count == 2) ||
+        (whitePieces.Count == 2 && blackPieces.Count == 1))
+    {
+        List<BasePiece> twoPieces = whitePieces.Count == 2 ? whitePieces : blackPieces;
+        
+        foreach (BasePiece piece in twoPieces)
         {
-            Debug.Log($"Checkmate! {(isWhiteTurn ? "Black" : "White")} wins!");
-            // Handle checkmate (end game, show UI, etc.)
-        }
-        else if (IsStalemate(isWhiteTurn))
-        {
-            Debug.Log("Stalemate! Draw!");
-            // Handle stalemate (end game, show UI, etc.)
-        }
-        else if (IsKingInCheck(isWhiteTurn))
-        {
-            Debug.Log($"{(isWhiteTurn ? "White" : "Black")} is in check!");
+            if (piece.pieceType == BasePiece.PieceType.Bishop || 
+                piece.pieceType == BasePiece.PieceType.Knight)
+                return true;
         }
     }
+    
+    if (whitePieces.Count == 2 && blackPieces.Count == 2)
+    {
+        BasePiece whiteBishop = whitePieces.Find(p => p.pieceType == BasePiece.PieceType.Bishop);
+        BasePiece blackBishop = blackPieces.Find(p => p.pieceType == BasePiece.PieceType.Bishop);
+        
+        if (whiteBishop != null && blackBishop != null)
+        {
+            bool whiteOnLightSquare = (whiteBishop.currentSquare.x + whiteBishop.currentSquare.y) % 2 == 1;
+            bool blackOnLightSquare = (blackBishop.currentSquare.x + blackBishop.currentSquare.y) % 2 == 1;
+            
+            if (whiteOnLightSquare == blackOnLightSquare)
+                return true;
+        }
+    }
+    
+    return false;
+}
 }

@@ -10,8 +10,6 @@ public class Rook : BasePiece
     }
     public override void MoveTo(Vector2Int boardPosition)
     {
-        Debug.Log("Rook moveto method called");
-
         base.MoveTo(boardPosition);
     }
 

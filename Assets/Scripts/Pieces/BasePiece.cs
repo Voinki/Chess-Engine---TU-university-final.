@@ -4,7 +4,7 @@ using UnityEngine;
 public abstract class BasePiece : MonoBehaviour
 {
     public enum PieceType { Pawn, Rook, Knight, Bishop, Queen, King };
-    public bool isWhite; // True for white , false for black 
+    public bool isWhite; // tru for white , false for black 
     public bool hasMoved = false; // for pawns and castling
     public Vector2Int currentSquare;
     private List<Vector2Int> legalMoves = new List<Vector2Int>();
@@ -21,18 +21,18 @@ public abstract class BasePiece : MonoBehaviour
         BasePiece targetPiece = boardManager.piecesOnBoard[targetSquare.x, targetSquare.y];
         if (targetPiece != null && targetPiece != this)
         {
-            // Capture it
             Destroy(targetPiece.gameObject);
             boardManager.piecesOnBoard[targetSquare.x, targetSquare.y] = null;
         }
 
-         boardManager.piecesOnBoard[currentSquare.x, currentSquare.y] = null;
+        boardManager.piecesOnBoard[currentSquare.x, currentSquare.y] = null;
 
         currentSquare = targetSquare;
         hasMoved = true;
         boardManager.piecesOnBoard[targetSquare.x, targetSquare.y] = this;
-       
+
         Transform squareTransform = boardManager.boardParent.Find($"{(char)('a' + targetSquare.x)}{targetSquare.y + 1}");
+        
         if (squareTransform != null)
             transform.position = squareTransform.position + Vector3.up * 0.05f;
         else
@@ -45,12 +45,10 @@ public abstract class BasePiece : MonoBehaviour
         normalMoves = new List<Vector2Int>(normal);
         captureMoves = new List<Vector2Int>(captures);
 
-        // For validation purposes, legalMoves contains all
         legalMoves = new List<Vector2Int>();
         legalMoves.AddRange(normalMoves);
         legalMoves.AddRange(captureMoves);
 
-        // Keep legalCaptures separate for highlighting red
         legalCaptures = new List<Vector2Int>(captureMoves);
     }
 

@@ -5,7 +5,7 @@ public class FENManager : MonoBehaviour
 
     public void SetupPositionFromFEN(string fen)
     {
-        // Example FEN: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+        // starting FEN -> rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
         string[] parts = fen.Split(' ');
         string[] ranks = parts[0].Split('/');
 
@@ -16,23 +16,17 @@ public class FENManager : MonoBehaviour
             foreach (char c in ranks[rank])
             {
                 if (char.IsDigit(c))
-                {
                     file += (int)char.GetNumericValue(c); // empty squares
-                }
                 else
                 {
-                    // Determine color by case
                     string color = char.IsUpper(c) ? "white" : "black";
 
-                    // Keep uppercase for type to match prefab/component mapping
                     string type = char.ToUpper(c).ToString();
 
-                    // Square naming
                     char fileChar = (char)('a' + file);
-                    int boardRank = 8 - rank; // rank 8 is top row
+                    int boardRank = 8 - rank; 
                     string squareName = $"{fileChar}{boardRank}";
 
-                    // Place piece
                     pieceManager.PlacePiece(type, color, squareName);
 
                     file++;

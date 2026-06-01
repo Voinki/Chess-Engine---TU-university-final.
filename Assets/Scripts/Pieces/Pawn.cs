@@ -27,17 +27,15 @@ public class Pawn : BasePiece
             {
                 Destroy(capturedPawn.gameObject);
                 boardManager.piecesOnBoard[capturedPawnSquare.x, capturedPawnSquare.y] = null;
-                Debug.Log($"En passant captured pawn at {capturedPawnSquare}");
             }
         }
 
         base.MoveTo(boardPosition);
 
-        if (Mathf.Abs(boardPosition.y - oldRank) == 2)
+        if (Mathf.Abs(boardPosition.y - oldRank) == 2) // enpassant square
         {
             int middleRank = (oldRank + boardPosition.y) / 2;
-            boardManager.enPassantSquare = new Vector2Int(boardPosition.x, middleRank);
-            Debug.Log($"En passant square set to {boardManager.enPassantSquare}");
+            boardManager.enPassantSquare = new Vector2Int(boardPosition.x, middleRank); 
         }
 
         if ((isWhite && currentSquare.y == 7) || (!isWhite && currentSquare.y == 0))
@@ -50,7 +48,7 @@ public class Pawn : BasePiece
                 gameManager.isPromotionPending = false;
             }
             else
-                StartCoroutine(HandlePromotion()); // user -> coroutine for UI
+                StartCoroutine(HandlePromotion()); 
 
         }
 
@@ -98,7 +96,6 @@ public class Pawn : BasePiece
         {
             normalMoves.Add(new Vector2Int(x, oneStepY));
 
-            // Only allow 2-step if still inside board
             if (!hasMoved && twoStepY >= 0 && twoStepY < 8 && board[x, twoStepY] == null)
                 normalMoves.Add(new Vector2Int(x, twoStepY));
         }
@@ -114,7 +111,7 @@ public class Pawn : BasePiece
         gameManager.isPromotionPending = true;
 
         PromotionUI promotionUI = FindFirstObjectByType<PromotionUI>();
-        PieceType chosenType = PieceType.Queen; // default
+        PieceType chosenType = PieceType.Queen; // def
         bool selectionDone = false;
 
         promotionUI.Show((selectedPiece) =>
@@ -127,23 +124,66 @@ public class Pawn : BasePiece
 
         Promote(chosenType);
         gameManager.isPromotionPending = false;
+
+        if (!gameManager.IsWhiteTurn && !gameManager.IsGameOver)
+        {
+            AIOpponent ai = FindFirstObjectByType<AIOpponent>();
+            if (ai != null)
+                ai.MakeMoveIfItsAITurn();
+        }
     }
-    private void Promote(PieceType newType)
+private void Promote(PieceType newType)
+{
+    Vector2Int pos = currentSquare;
+    BoardManager bm = boardManager; // Store reference BEFORE destroying
+    bool wasWhite = isWhite; // Store color before destroying
+    
+    // Clear the board position BEFORE destroying
+    bm.piecesOnBoard[pos.x, pos.y] = null;
+    
+    Destroy(gameObject);
+
+    PieceManager pieceManager = FindFirstObjectByType<PieceManager>();
+    BasePiece promotedPiece = pieceManager.PromotePieceAt(pos, wasWhite, newType);
+
+    if (promotedPiece == null)
     {
-        Vector2Int pos = currentSquare;
-
-        Destroy(gameObject);
-
-        PieceManager pieceManager = FindFirstObjectByType<PieceManager>();
-        BasePiece promotedPiece = pieceManager.PromotePieceAt(pos, isWhite, newType);
-
-        if (promotedPiece == null)
-            return;
-
-        boardManager.piecesOnBoard[pos.x, pos.y] = promotedPiece;
-        promotedPiece.CalculateValidMoves(boardManager.piecesOnBoard);
+        Debug.LogError("PromotePieceAt returned null!");
+        return;
     }
 
+    // Set the board reference
+    bm.piecesOnBoard[pos.x, pos.y] = promotedPiece;
+    
+    // Calculate moves for the promoted piece
+    promotedPiece.CalculateValidMoves(bm.piecesOnBoard);
+    
+    Debug.Log($"Promoted to {newType} at {pos}, moves BEFORE filtering: normal={promotedPiece.normalMoves.Count}, capture={promotedPiece.captureMoves.Count}");
+    
+    // CRITICAL: Recalculate and filter moves for the promoted piece's side IMMEDIATELY
+    MoveValidator moveValidator = FindFirstObjectByType<MoveValidator>();
+    if (moveValidator != null)
+    {
+        // Recalculate all pieces' moves
+        for (int x = 0; x < 8; x++)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                BasePiece piece = bm.piecesOnBoard[x, y];
+                if (piece != null)
+                {
+                    piece.CalculateValidMoves(bm.piecesOnBoard);
+                }
+            }
+        }
+        
+        // Filter illegal moves for the promoted piece's color
+        moveValidator.FilterIllegalMoves(wasWhite);
+    }
+    
+    Debug.Log($"Promoted queen after filtering: normal={promotedPiece.normalMoves.Count}, capture={promotedPiece.captureMoves.Count}");
+    Debug.Log($"Promoted queen currentSquare: {promotedPiece.currentSquare}, isWhite: {promotedPiece.isWhite}, pieceType: {promotedPiece.pieceType}");
+}
     private bool IsInsideBoard(Vector2Int square)
     {
         return square.x >= 0 && square.x < 8 && square.y >= 0 && square.y < 8;
